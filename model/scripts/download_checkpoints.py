@@ -15,11 +15,14 @@
 
 import argparse
 import os
+from pathlib import Path
 
 import huggingface_hub
 from huggingface_hub import snapshot_download
 
 """Download mimic-video models from Hugging Face."""
+
+DEFAULT_CHECKPOINT_DIR = Path(__file__).resolve().parents[1] / "checkpoints"
 
 
 _CHECKPOINTS = [
@@ -55,7 +58,7 @@ def get_checkpoints(policy_name: str) -> tuple[str, ...]:
 
     return (
         f"action_decoder/w2a_{policy_name}*",
-        f"video_backbone/v2w_{policy_name.split('_')[:2]}*",
+        f"video_backbone/v2w_{'_'.join(policy_name.split('_')[:2])}*",
         f"dataset_statistics/{policy_name}.json",
     )
 
@@ -70,7 +73,10 @@ def parse_args():
         help="Which models to download.",
     )
     parser.add_argument(
-        "--checkpoint-dir", type=str, default="checkpoints", help="Directory to save the downloaded checkpoints."
+        "--checkpoint-dir",
+        type=str,
+        default=str(DEFAULT_CHECKPOINT_DIR),
+        help="Directory to save the downloaded checkpoints.",
     )
     parser.add_argument(
         "--dry-run",
@@ -82,6 +88,7 @@ def parse_args():
 
 
 def main(args):
+    args.checkpoint_dir = os.path.abspath(os.path.expanduser(args.checkpoint_dir))
     os.makedirs(args.checkpoint_dir, exist_ok=True)
 
     allow_patterns = [

@@ -1,5 +1,8 @@
 GPUS=(0 1 2 3 4 5 6 7)
 
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+checkpoint_dir="${MIMIC_VIDEO_CHECKPOINT_DIR:-$(cd "${SCRIPT_DIR}/../../model" && pwd)/checkpoints}"
+
 fifo="/tmp/gpuq.$$"
 mkfifo "$fifo"
 exec 3<>"$fifo"
@@ -29,8 +32,6 @@ launch() {
     exit $rc
   ) &
 }
-
-checkpoint_dir=...
 
 declare -A ptcosmos=(
   [img_h]=5

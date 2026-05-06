@@ -42,6 +42,7 @@ class MimicDataset(torch.utils.data.Dataset):
     ) -> None:
         self._data_dir = pathlib.Path(data_dir)
         self._episode_paths = get_paths(self._data_dir, verbose=verbose)
+        self._train = train
 
         def get_source_component(key: str, spec: dict, prefix: str) -> tuple[str, ObsMeta]:
             source_name = source_component_names.get(f"{prefix}/{key}", key)
@@ -171,6 +172,7 @@ class MimicDataset(torch.utils.data.Dataset):
             data,
             self._data_transforms,
             should_ignore_transforms_for_norm=self._should_ignore_transforms_for_norm,
+            is_train=self._train,
         )
 
     @staticmethod

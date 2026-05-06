@@ -1,4 +1,5 @@
-checkpoint_dir=...
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+checkpoint_dir="${MIMIC_VIDEO_CHECKPOINT_DIR:-$(cd "${SCRIPT_DIR}/../../model" && pwd)/checkpoints}"
 
 declare -A ptcosmos=(
   [img_h]=5

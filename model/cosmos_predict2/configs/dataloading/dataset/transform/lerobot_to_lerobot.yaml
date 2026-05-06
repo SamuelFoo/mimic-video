@@ -1,0 +1,57 @@
+data_transforms:
+  - name: CosmosProcessImage
+    targets: [workspace_rgb]
+    resize_sizes: ${policy_io.img_resize_sizes}
+
+  # --- Image augmentations (train-only, applied AFTER CosmosProcessImage so
+  # they operate on float [-1, 1] tensors of the final resolution).
+  # Same random parameters are applied across all matching keys (obs/ and
+  # action/ workspace_rgb) and across all timesteps within each clip.
+  #
+  # Pipeline order is intentional:
+  #   geometric (crop) -> blur (motion / defocus) -> color (hue/photometric)
+  #   -> noise (sensor)
+  # Blurs are prob-gated; the rest are always applied with bounded ranges.
+  - name: RandomShiftCrop
+    targets: [workspace_rgb]
+    max_shift_pixels: 4
+
+  - name: MotionBlur
+    targets: [workspace_rgb]
+    prob: 0.15
+    kernel_size_range: [3, 7]
+
+  - name: GaussianBlur
+    targets: [workspace_rgb]
+    prob: 0.25
+    sigma_range: [0.1, 1.2]
+
+  - name: HueShift
+    targets: [workspace_rgb]
+    max_shift: 0.04
+
+  - name: RandomPhotometric
+    targets: [workspace_rgb]
+    brightness: 0.15
+    contrast: 0.15
+    channel: 0.1
+
+  - name: GaussianNoise
+    targets: [workspace_rgb]
+    std_range: [0.0, 0.03]
+
+  # --- Lowdim shaping. Joint data is already a flat (T, 6) vector so Flatten
+  # is effectively a dtype/shape guarantee. Concat puts the obs/action joint
+  # vectors under the canonical lowdim_concat keys the model consumes.
+  - name: Flatten
+    targets: [lowdim]
+
+  - name: Concat
+    targets: ${policy_io.concat_groups.action/lowdim_concat}
+    out_key: "action/lowdim_concat"
+  - name: Concat
+    targets: ${policy_io.concat_groups.obs/lowdim_concat}
+    out_key: "obs/lowdim_concat"
+
+# obs/* and action/* keys map directly to the zarr-side names — no aliases.
+source_component_names: {}
