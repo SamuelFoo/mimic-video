@@ -54,6 +54,8 @@ NON_FINETUNED: dict = {
             video_pipe_config=get_cosmos_predict2_video2world_pipeline(model_size="2B", resolution="480", fps=10),
             fsdp_shard_size=0,
             data_config="${data_config}",
+            validation_num_sampling_steps=12,
+            validation_run_generated_video=False,
         )
     ),
 }

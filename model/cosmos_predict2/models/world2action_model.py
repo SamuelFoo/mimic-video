@@ -67,6 +67,8 @@ class World2ActionModelConfig:
 
     fsdp_shard_size: int  # 0 means not using fsdp, -1 means set to world size
     data_config: DictConfig
+    validation_num_sampling_steps: int = 12
+    validation_run_generated_video: bool = False
 
 
 def _dp_mean(x: torch.Tensor) -> torch.Tensor:
@@ -424,7 +426,10 @@ class World2ActionModel(ImaginaireModel):
         output_batch["mses"] = collections.defaultdict(list)
 
         # get mses for gt video + noise
-        self.video2world_pipe.scheduler.set_timesteps(35, device=self.tensor_kwargs["device"])
+        self.video2world_pipe.scheduler.set_timesteps(
+            self.config.validation_num_sampling_steps,
+            device=self.tensor_kwargs["device"],
+        )
         for video_sigma in self.video2world_pipe.scheduler.sigmas:
             video_sigma_B_1 = video_sigma.repeat(unnormed_x0_B_HA_A.shape[0]).unsqueeze(1)
             unnormed_x0_pred_B_HA_A = self.predict(data_batch, video_sigma_B_1).float()
@@ -447,6 +452,9 @@ class World2ActionModel(ImaginaireModel):
         )
         gc.collect()
 
+        if not self.config.validation_run_generated_video:
+            return output_batch, loss
+
         # get mses for generated video
         input_vid = data_batch["obs/workspace_rgb"]
         B, C, T, H, W = input_vid.shape
@@ -459,7 +467,7 @@ class World2ActionModel(ImaginaireModel):
             num_latent_conditional_frames=1 if T == 1 else 2,
             prompt_embedding=data_batch["obs/language_embedding"],
             guidance=0.0,
-            num_sampling_step=35,
+            num_sampling_step=self.config.validation_num_sampling_steps,
             seed=0,
             use_cuda_graphs=False,
             return_all_context=True,
