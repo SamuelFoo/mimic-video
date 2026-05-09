@@ -24,6 +24,17 @@ from cosmos_predict2.module import normalizer
 from cosmos_predict2.module.normalizer import array_to_stats
 
 
+def _get_available_cpu_count() -> int:
+    for env_name in ("SLURM_CPUS_PER_TASK", "SLURM_CPUS_ON_NODE", "SLURM_JOB_CPUS_PER_NODE"):
+        raw_value = os.environ.get(env_name)
+        if raw_value:
+            try:
+                return max(1, int(raw_value.split("(", 1)[0]))
+            except ValueError:
+                pass
+    return os.cpu_count() or 4
+
+
 class MimicDataset(torch.utils.data.Dataset):
     def __init__(
         self,
@@ -126,12 +137,15 @@ class MimicDataset(torch.utils.data.Dataset):
 
     def _compute_statistics(self) -> dict:
         data_cache = collections.defaultdict(list)
+        default_stats_workers = max(1, _get_available_cpu_count() // 4)
+        stats_num_workers = int(os.environ.get("MIMIC_STATS_NUM_WORKERS", default_stats_workers))
+        stats_batch_size = int(os.environ.get("MIMIC_STATS_BATCH_SIZE", default_stats_workers))
 
         with self.restrict_chunk_reader() as normed_keys, normed_keys.ignore_transforms() as dataset:
             dataloader = torch.utils.data.DataLoader(
                 dataset=dataset,
-                batch_size=(os.cpu_count() or 4) // 4,
-                num_workers=(os.cpu_count() or 4) // 4,
+                batch_size=stats_batch_size,
+                num_workers=stats_num_workers,
             )
             for batch in tqdm.tqdm(dataloader, desc="Iterating dataset to get normalization"):
                 for key, values in batch.items():
