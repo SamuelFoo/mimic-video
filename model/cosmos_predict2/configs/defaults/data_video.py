@@ -24,6 +24,14 @@ def get_sampler(dataset) -> ResumableDistributedSampler:
 cs = ConfigStore.instance()
 
 train_datasets: dict[str, Dataset_] = {
+    "ex1_merged": L(Dataset)(
+        dataset_dir="/ephemeral/robot_learning_project/data/ex1_merged-cosmos-video",
+        num_frames=61,
+        video_size=[480, 640],
+        data_fps=10.0,
+        is_val=False,
+        obs_history=5,
+    ),
     "bridge": L(Dataset)(
         dataset_dir=...,
         num_frames=61,

@@ -69,7 +69,7 @@ BASE: dict = dict(
 
 lrs = np.logspace(-5, -3, 9)[[5]]
 bszs = [32]
-ranks = [256]
+ranks = [16, 32, 64, 128, 256]
 
 
 def get_local_batch_size(global_bsz: int) -> int:

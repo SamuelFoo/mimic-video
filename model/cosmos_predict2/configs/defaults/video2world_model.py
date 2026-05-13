@@ -50,6 +50,6 @@ def register_model() -> None:
     cs.store(
         group="model",
         package="_global_",
-        name="v2w_pretrained_cosmos",
+        name="predict2_video2world_ddp_2b_480p_10fps",
         node=_PREDICT2_VIDEO2WORLD_DDP_2B_480P_10FPS,
     )
