@@ -20,7 +20,7 @@ We instantiate our approach with the lightweight 2B Cosmos-Predict2 video model 
 
 ## Repository Overview
 
-We provide our data ([DATA.md](DATA.md)), modeling ([MODEL.md](MODEL.md)), and evaluation ([EVAL.md](EVAL.md)) code. See the respective markdowns for details.
+We provide our data ([DATA.md](DATA.md)), modeling ([MODEL.md](MODEL.md)), and evaluation ([Evaluation](#Evaluation)) code. See the respective markdowns for details.
 
 ```
 mimic-video
