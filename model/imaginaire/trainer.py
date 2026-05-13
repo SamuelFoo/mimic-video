@@ -272,14 +272,6 @@ class ImaginaireTrainer:
                 if _end_training:
                     break
 
-                if min(iteration % 10_000, 10_000 - (iteration % 10_000)) < 100:
-                    self.checkpointer.save(
-                        model,
-                        optimizer,
-                        scheduler,
-                        grad_scaler,
-                        iteration=iteration,
-                    )
                 if self.config.trainer.run_validation and iteration % self.config.trainer.validation_iter != 0:
                     torch.cuda.synchronize()
                     torch.cuda.empty_cache()
