@@ -32,6 +32,14 @@ train_datasets: dict[str, Dataset_] = {
         is_val=False,
         obs_history=5,
     ),
+    "ex2_merged": L(Dataset)(
+        dataset_dir="/ephemeral/robot_learning_project/data/ex2_merged-cosmos-video",
+        num_frames=61,
+        video_size=[480, 640],
+        data_fps=10.0,
+        is_val=False,
+        obs_history=5,
+    ),
     "bridge": L(Dataset)(
         dataset_dir=...,
         num_frames=61,
@@ -76,7 +84,9 @@ for k, v in train_datasets.items():
     val_datasets[k] = ds
 
 
-dataset_mixes = {}
+dataset_mixes = {
+    "ex1_ex2_merged": "ex1_merged,ex2_merged",
+}
 
 for name, mix in dataset_mixes.items():
     train_datasets[name] = L(MultiDataset)(**{k: train_datasets[k] for k in mix.split(",")})
