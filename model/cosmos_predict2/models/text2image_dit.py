@@ -1532,9 +1532,19 @@ class MiniTrainDIT(WeightTrainingStat):
             "adaln_lora_B_T_3D": adaln_lora_B_T_3D,
             "extra_per_block_pos_emb": extra_pos_emb_B_T_H_W_D_or_T_H_W_B_D,
         }
-        hidden_states = []
-        if return_hidden_states:
-            hidden_states.append(x_B_T_H_W_D.detach().clone())
+        # Only retain the requested layer's hidden state, keyed by its block
+        # index. The previous implementation cloned every layer's tensor into a
+        # list, which dominates memory when stop layer is deep — e.g. at the
+        # 2B 480p config, each tensor is ~90 MB·B and 21 of them get held
+        # simultaneously. All in-tree callers index `hidden_states[K]` for a
+        # specific K, so a dict with one entry preserves their access pattern.
+        # `return_only_hidden_states_up_to == float("inf")` retains every layer
+        # (used by callers that pick the layer index after the forward pass).
+        hidden_states: dict[int, torch.Tensor] = {}
+        save_all_layers = return_hidden_states and not math.isfinite(return_only_hidden_states_up_to)
+        target_layer = return_only_hidden_states_up_to if return_hidden_states else None
+        if save_all_layers or target_layer == 0:
+            hidden_states[0] = x_B_T_H_W_D.detach().clone()
 
         for i, block in enumerate(blocks, 1):
             if return_hidden_states and i > return_only_hidden_states_up_to:
@@ -1546,8 +1556,8 @@ class MiniTrainDIT(WeightTrainingStat):
                 crossattn_emb,
                 **block_kwargs,
             )
-            if return_hidden_states:
-                hidden_states.append(x_B_T_H_W_D.detach().clone())
+            if save_all_layers or target_layer == i:
+                hidden_states[i] = x_B_T_H_W_D.detach().clone()
 
         x_B_T_H_W_O = self.final_layer(x_B_T_H_W_D, t_embedding_B_T_D, adaln_lora_B_T_3D=adaln_lora_B_T_3D)
         x_B_C_Tt_Hp_Wp = self.unpatchify(x_B_T_H_W_O)

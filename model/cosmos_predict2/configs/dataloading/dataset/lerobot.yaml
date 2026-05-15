@@ -23,7 +23,8 @@ dataset:
   _target_: cosmos_predict2.data.action.dataset_action.MimicDataset
   _convert_: partial
   data_dir: ${oc.env:MIMIC_VIDEO_DATASET_DIR}
-  timestep_anchor: workspace_rgb
+  # Anchor training samples at 5 Hz instead of every raw LeRobot frame.
+  timestep_anchor: uniform@5
   data_components: ${..data_components}
   data_transforms: ${..data_transforms}
   source_component_names: ${..source_component_names}

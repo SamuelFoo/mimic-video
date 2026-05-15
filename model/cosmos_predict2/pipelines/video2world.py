@@ -591,12 +591,19 @@ class Video2WorldPipeline(BasePipeline):
 
     def get_mimic_data_and_condition(
         self, data_batch: dict[str, torch.Tensor]
-    ) -> tuple[torch.Tensor, torch.Tensor, TextCondition]:
-        raw_state = torch.concat(
-            (data_batch["obs/workspace_rgb"], data_batch["action/workspace_rgb"]),
-            dim=2,
-        )
-        latent_state = self.encode(raw_state).contiguous().float()
+    ) -> tuple[torch.Tensor | None, torch.Tensor, TextCondition]:
+        # Precomputed VAE latents are required
+        # raw_state is kept for the return signature;
+        # the world2action caller discards it via the leading-underscore unpack.
+        if "video_latent" not in data_batch:
+            raise RuntimeError(
+                "video_latent missing from batch — run "
+                "scripts/precompute_video_latents.sh before training to "
+                "populate the .latent_cache."
+            )
+        latent_state = data_batch["video_latent"].contiguous().float()
+        raw_state = None
+        num_pixel_conditional_frames = int(data_batch["num_pixel_conditional_frames"][0].item())
 
         B, *_, H, W = latent_state.shape
         data_batch["padding_mask"] = torch.zeros(B, 1, H, W, **self.tensor_kwargs)
@@ -610,7 +617,7 @@ class Video2WorldPipeline(BasePipeline):
             gt_frames=latent_state.to(**self.tensor_kwargs),
             random_min_num_conditional_frames=self.config.min_num_conditional_frames,
             random_max_num_conditional_frames=self.config.max_num_conditional_frames,
-            num_conditional_frames=self.tokenizer.get_latent_num_frames(data_batch["obs/workspace_rgb"].shape[2]),
+            num_conditional_frames=self.tokenizer.get_latent_num_frames(num_pixel_conditional_frames),
         )
         return raw_state, latent_state, condition
 

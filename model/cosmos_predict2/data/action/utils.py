@@ -1,5 +1,4 @@
 import pathlib
-import pickle
 from collections.abc import Sequence
 from typing import TypeVar
 
@@ -13,20 +12,8 @@ def get_paths(
     *,
     verbose: bool = False,
 ) -> list[pathlib.Path]:
-    paths_cache = data_dir / "paths.pkl"
-
-    try:
-        with paths_cache.open("rb") as f:
-            return pickle.load(f)
-    except FileNotFoundError:
-        pass
-
-    paths = sorted(data_dir.glob("**/*.zarr"))
-
-    with paths_cache.open("wb") as f:
-        pickle.dump(paths, f)
-
-    return paths
+    # Cache removed: glob is ~30 ms on a 100-episode local-disk dataset
+    return sorted(data_dir.glob("**/*.zarr"))
 
 
 def dict_apply(x: dict, func) -> dict:

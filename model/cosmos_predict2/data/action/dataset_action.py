@@ -110,6 +110,26 @@ class MimicDataset(torch.utils.data.Dataset):
         self._threadpool_limits_is_applied = False
         self._should_ignore_transforms_for_norm = False
 
+        # Precomputed VAE latent cache (see scripts/precompute_video_latents.py).
+        # If present, __getitem__ injects `video_latent` and drops raw RGB.
+        # If absent, the dataset returns RGB — the precompute script uses that
+        # to bootstrap the cache. Missing-cache enforcement happens in the
+        # training pipeline (Video2WorldPipeline.get_mimic_data_and_condition),
+        # which raises on the first batch.
+        split = "train" if train else "val"
+        cache_path = self._data_dir / ".latent_cache" / f"{split}_{self._stats_id}.pt"
+        self._latent_cache: torch.Tensor | None = None
+        if cache_path.exists():
+            cached = torch.load(cache_path, mmap=True, weights_only=True)
+            expected_n = len(self._chunk_reader)
+            if len(cached) != expected_n:
+                raise ValueError(
+                    f"Latent cache {cache_path} has {len(cached)} entries but the "
+                    f"dataset has {expected_n}. Regenerate via "
+                    f"scripts/precompute_video_latents.py."
+                )
+            self._latent_cache = cached
+
     @property
     def data_dir(self) -> pathlib.Path:
         return self._data_dir
@@ -182,12 +202,25 @@ class MimicDataset(torch.utils.data.Dataset):
 
         data = self._chunk_reader.read_chunk(idx)
 
-        return apply_data_transforms(
+        sample = apply_data_transforms(
             data,
             self._data_transforms,
             should_ignore_transforms_for_norm=self._should_ignore_transforms_for_norm,
             is_train=self._train,
         )
+        if self._latent_cache is not None and not self._should_ignore_transforms_for_norm:
+            # Preserve the observed pixel-frame count needed by
+            # Video2WorldPipeline.set_video_condition, then drop raw RGB clips.
+            # With cached latents the model no longer needs those tensors.
+            if "obs/workspace_rgb" in sample:
+                sample["num_pixel_conditional_frames"] = np.array(sample["obs/workspace_rgb"].shape[1], dtype=np.int64)
+            sample.pop("obs/workspace_rgb", None)
+            sample.pop("action/workspace_rgb", None)
+
+            # mmap'd bf16 tensor — clone so workers don't share a slice into the
+            # same backing storage, and cast to fp32 to match live-encode output.
+            sample["video_latent"] = self._latent_cache[idx].clone().float()
+        return sample
 
     @staticmethod
     def get_val_mask(n_episodes, n_val_episodes, seed=0) -> np.ndarray:
