@@ -68,37 +68,56 @@ LATENT_SHAPE = (16, 16, 60, 80)  # (T_latent, C, H, W) per sample
 
 
 def _encode_split(pipe, data_config, *, is_train: bool, cache_dir: pathlib.Path) -> None:
+    rank = distributed.get_rank()
+    world_size = distributed.get_world_size()
+    is_rank0 = distributed.is_rank0()
+
     dataset = get_dataset(data_config, is_train=is_train)
     n = len(dataset)
     split_name = "train" if is_train else "val"
     if n == 0:
-        logging.warning(f"Empty {split_name} dataset, skipping.")
+        if is_rank0:
+            logging.warning(f"Empty {split_name} dataset, skipping.")
         return
 
     cache_path = cache_dir / f"{split_name}_{dataset.stats_id}.pt"
     if cache_path.exists():
-        logging.info(f"{cache_path} already exists; reusing ({n} samples).")
+        if is_rank0:
+            logging.info(f"{cache_path} already exists; reusing ({n} samples).")
         return
 
-    latents = torch.empty((n, *LATENT_SHAPE), dtype=torch.bfloat16)
+    # DistributedSampler scatters the n dataset indices across ranks. When
+    # n % world_size != 0 it pads the tail by repeating early indices — those
+    # samples get encoded twice and the merge writes identical data to the
+    # same slot, so it's wasted compute, not a correctness issue.
+    sampler = torch.utils.data.distributed.DistributedSampler(
+        dataset, num_replicas=world_size, rank=rank, shuffle=False, drop_last=False,
+    )
+    local_indices = list(sampler)
 
     # DataLoader overlaps the CPU side (zarr reads + PIL resize in
-    # CosmosProcessImage) with the GPU encoder forward. shuffle=False keeps
-    # cache index == dataset index.
+    # CosmosProcessImage) with the GPU encoder forward.
     loader = torch.utils.data.DataLoader(
         dataset,
         batch_size=BATCH_SIZE,
+        sampler=sampler,
         num_workers=NUM_WORKERS,
-        shuffle=False,
         pin_memory=True,
         persistent_workers=NUM_WORKERS > 0,
         prefetch_factor=PREFETCH_FACTOR if NUM_WORKERS > 0 else None,
     )
 
+    local_latents = torch.empty((len(local_indices), *LATENT_SHAPE), dtype=torch.bfloat16)
+
     # Progress in samples, not batches — bumps by `bs` per loader iteration so
     # the ETA reflects actual samples-per-second regardless of batch size.
     write_pos = 0
-    pbar = tqdm.tqdm(total=n, unit="sample", desc=f"Encoding {split_name}")
+    pbar = tqdm.tqdm(
+        total=len(local_indices),
+        unit="sample",
+        desc=f"Encoding {split_name} [rank {rank}]",
+        position=rank,
+    )
     for batch in loader:
         obs = batch["obs/workspace_rgb"].cuda(non_blocking=True)
         action = batch["action/workspace_rgb"].cuda(non_blocking=True)
@@ -108,19 +127,48 @@ def _encode_split(pipe, data_config, *, is_train: bool, cache_dir: pathlib.Path)
             encoded = pipe.encode(raw)  # [B, 16, 16, 60, 80]
 
         bs = encoded.shape[0]
-        latents[write_pos : write_pos + bs] = encoded.detach().cpu().to(torch.bfloat16)
+        local_latents[write_pos : write_pos + bs] = encoded.detach().cpu().to(torch.bfloat16)
         write_pos += bs
         pbar.update(bs)
     pbar.close()
 
-    assert write_pos == n, f"Wrote {write_pos} latents but dataset has {n}"
+    assert write_pos == len(local_indices), (
+        f"Wrote {write_pos} latents but sampler has {len(local_indices)}"
+    )
 
+    # Each rank writes a shard tagged with its source indices; rank 0 then
+    # scatters them into one merged tensor. Same path for world_size == 1.
     cache_dir.mkdir(parents=True, exist_ok=True)
+    shard_dir = cache_dir / f".{split_name}_{dataset.stats_id}.shards"
+    shard_dir.mkdir(parents=True, exist_ok=True)
+    shard_path = shard_dir / f"rank{rank:04d}.pt"
+    torch.save(
+        {
+            "indices": torch.tensor(local_indices, dtype=torch.int64),
+            "latents": local_latents,
+        },
+        shard_path,
+    )
+
+    distributed.barrier()
+
+    if not is_rank0:
+        return
+
+    merged = torch.empty((n, *LATENT_SHAPE), dtype=torch.bfloat16)
+    for r in range(world_size):
+        shard = torch.load(shard_dir / f"rank{r:04d}.pt", map_location="cpu")
+        merged[shard["indices"]] = shard["latents"]
+
     tmp_path = cache_path.with_suffix(".pt.tmp")
-    torch.save(latents, tmp_path)
+    torch.save(merged, tmp_path)
     tmp_path.rename(cache_path)
     size_gb = cache_path.stat().st_size / 1e9
     logging.info(f"Saved {n} {split_name} latents to {cache_path} ({size_gb:.2f} GB)")
+
+    for r in range(world_size):
+        (shard_dir / f"rank{r:04d}.pt").unlink()
+    shard_dir.rmdir()
 
 
 def main() -> None:
