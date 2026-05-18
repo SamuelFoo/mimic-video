@@ -168,7 +168,6 @@ class Checkpointer:
         Returns:
             iteration (int): the iteration number to start/resume from.
         """
-        assert self.load_path is None, "load_path is not supported yet"
         self.callbacks.on_load_checkpoint_start(model)
 
         is_fsdp = model.config.fsdp_shard_size != 0 and distributed.get_world_size() > 1
@@ -183,6 +182,14 @@ class Checkpointer:
             trainer_checkpoint_path = os.path.join(checkpoint_dir, "trainer", latest_checkpoint_file)
             resume = True
             only_resume_scheduler = True
+        elif self.load_path is not None:
+            # 2. Warm-start from external weights: load model only, reset iteration/optim/scheduler.
+            model_checkpoint_path = self.load_path
+            optimizer_checkpoint_path = None
+            scheduler_checkpoint_path = None
+            trainer_checkpoint_path = None
+            resume = False
+            only_resume_scheduler = False
         else:
             model_checkpoint_path = None
             optimizer_checkpoint_path = None
@@ -192,7 +199,7 @@ class Checkpointer:
             only_resume_scheduler = False
 
         # Load checkpoint.
-        if latest_checkpoint_file is not None:
+        if model_checkpoint_path is not None:
             torch.cuda.empty_cache()
             state_dicts_paths = {
                 "model": model_checkpoint_path,
@@ -202,6 +209,8 @@ class Checkpointer:
             }
             state_dicts_to_load = {}
             for key, checkpoint_path in state_dicts_paths.items():
+                if checkpoint_path is None:
+                    continue
                 self._check_checkpoint_exists(checkpoint_path)
                 log.info(f"Loading checkpoint (local): {checkpoint_path}")
                 state_dicts_to_load[key] = torch.load(checkpoint_path, map_location=lambda storage, loc: storage)
