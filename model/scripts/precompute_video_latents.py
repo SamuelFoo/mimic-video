@@ -52,7 +52,7 @@ class _TokenizerOnlyPipe:
     @torch.no_grad()
     def encode(self, state: torch.Tensor) -> torch.Tensor:
         B, C, T, H, W = state.shape
-        if T not in {1, 5, 61} or (C, H, W) != (3, 480, 640):
+        if (T - 1) % 4 != 0 or (C, H, W) != (3, 480, 640):
             raise ValueError(f"Unexpected raw video shape {state.shape}")
         encoded = self.tokenizer.encode(state) * self.sigma_data
         if encoded.shape[2] == 16:

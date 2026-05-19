@@ -24,17 +24,49 @@ def get_sampler(dataset) -> ResumableDistributedSampler:
 cs = ConfigStore.instance()
 
 train_datasets: dict[str, Dataset_] = {
-    "ex1_merged": L(Dataset)(
-        dataset_dir="/ephemeral/robot_learning_project/data/ex1_merged-cosmos-video",
-        num_frames=61,
+    "ex1_all_v4": L(Dataset)(
+        dataset_dir="/ephemeral/robot_learning_project/data/ex1_all_v4-cosmos-video",
+        num_frames=21,
         video_size=[480, 640],
         data_fps=10.0,
         is_val=False,
         obs_history=5,
     ),
-    "ex2_merged": L(Dataset)(
-        dataset_dir="/ephemeral/robot_learning_project/data/ex2_merged-cosmos-video",
-        num_frames=61,
+    "ex2_all_v4": L(Dataset)(
+        dataset_dir="/ephemeral/robot_learning_project/data/ex2_all_v4-cosmos-video",
+        num_frames=21,
+        video_size=[480, 640],
+        data_fps=10.0,
+        is_val=False,
+        obs_history=5,
+    ),
+     "ex3-1-blue_all": L(Dataset)(
+        dataset_dir="/ephemeral/robot_learning_project/data/ex3-1-blue_all-cosmos-video",
+        num_frames=21,
+        video_size=[480, 640],
+        data_fps=10.0,
+        is_val=False,
+        obs_history=5,
+    ),
+     "ex3-2-blue_all": L(Dataset)(
+        dataset_dir="/ephemeral/robot_learning_project/data/ex3-2-blue_all-cosmos-video",
+        num_frames=21,
+        video_size=[480, 640],
+        data_fps=10.0,
+        is_val=False,
+        obs_history=5,
+    ),
+     "ex3-1-orange_all": L(Dataset)(
+        dataset_dir="/ephemeral/robot_learning_project/data/ex3-1-orange_all-cosmos-video",
+        num_frames=21,
+        video_size=[480, 640],
+        data_fps=10.0,
+        is_val=False,
+        obs_history=5,
+    ),
+     "ex3-2-orange_all": L(Dataset)(
+        dataset_dir="/ephemeral/robot_learning_project/data/ex3-2-orange_all-cosmos-video",
+        num_frames=21,
         video_size=[480, 640],
         data_fps=10.0,
         is_val=False,
@@ -85,7 +117,7 @@ for k, v in train_datasets.items():
 
 
 dataset_mixes = {
-    "ex1_ex2_merged": "ex1_merged,ex2_merged",
+    "ex1_ex2_ex3_merged": "ex1_all_v4, ex2_all_v4, ex3-1-blue_all, ex3-1-orange_all, ex3-2-blue_all, ex3-2_orange_all",
 }
 
 for name, mix in dataset_mixes.items():

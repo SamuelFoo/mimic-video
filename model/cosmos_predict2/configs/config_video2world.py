@@ -1,3 +1,4 @@
+
 # SPDX-FileCopyrightText: Copyright (c) 2025 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
 #
@@ -166,7 +167,7 @@ _PREDICT2_VIDEO2WORLD_PIPELINE_2B_480P_10FPS = Video2WorldPipelineConfig(
     sigma_conditional=0.0001,
     sigma_data=1.0,
     state_ch=16,
-    state_t=16,
+    state_t=6,
     tokenizer=L(TokenizerInterface)(
         chunk_duration=81,
         temporal_window=16,
