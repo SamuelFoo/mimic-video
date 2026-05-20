@@ -58,6 +58,13 @@ class Video2World2ActionPipeline(nn.Module):
             return_context_at_step=stop_after_step,
             hidden_state_layer_idx=self.world2action_pipeline.config.xattn_layer_idx,
         )
+
+        # Match training: slice the video DiT's hidden_states to the first N
+        # latent timesteps before feeding into the action decoder. Must equal
+        # the value used during training.
+        if self.world2action_pipeline.config.xattn_video_prefix_length is not None:
+            crossattn_emb = crossattn_emb[:, : self.world2action_pipeline.config.xattn_video_prefix_length]
+
         hidden_state_shape = crossattn_emb.shape
         crossattn_emb = crossattn_emb.reshape(hidden_state_shape[0], -1, hidden_state_shape[-1])
 

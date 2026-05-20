@@ -359,6 +359,9 @@ class World2ActionModel(ImaginaireModel):
         del world_pred
         gc.collect(0)
 
+        if self.pipe.config.xattn_video_prefix_length is not None:
+            crossattn_emb = crossattn_emb[:, : self.pipe.config.xattn_video_prefix_length]
+
         B, T, H, W, D = crossattn_emb.shape
         crossattn_emb = crossattn_emb.reshape(B, T * H * W, D)
 
@@ -475,6 +478,9 @@ class World2ActionModel(ImaginaireModel):
         )
         for video_sigma, crossattn_emb in context:
             video_sigma_B_1 = video_sigma.repeat(unnormed_x0_B_HA_A.shape[0]).unsqueeze(1)
+
+            if self.pipe.config.xattn_video_prefix_length is not None:
+                crossattn_emb = crossattn_emb[:, : self.pipe.config.xattn_video_prefix_length]
 
             hidden_state_shape = crossattn_emb.shape
             crossattn_emb = crossattn_emb.reshape(hidden_state_shape[0], -1, hidden_state_shape[-1])

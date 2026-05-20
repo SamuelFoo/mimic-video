@@ -37,3 +37,7 @@ class World2ActionPipelineConfig:
     net: LazyDict[nn.Module]
     ema: EMAConfig
     xattn_layer_idx: int
+    # Optional: slice the video DiT's hidden_states to the first N latent
+    # timesteps before feeding into the action decoder's cross-attention.
+    # None = use full 16 timesteps (default, current behavior).
+    xattn_video_prefix_length: int | None = None
