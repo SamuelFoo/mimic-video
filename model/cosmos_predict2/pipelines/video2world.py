@@ -537,19 +537,32 @@ class Video2WorldPipeline(BasePipeline):
 
     @torch.no_grad()
     def encode(self, state: torch.Tensor) -> torch.Tensor:
+        
         B, C, T, H, W = state.shape
 
-        if T not in {1, 5, 61} or (C, H, W) != (3, 480, 640):
-            msg = "Unexpected raw images sequence length ({state.shape=})"
+        if (T - 1) % 4 != 0 or (C, H, W) != (3, 480, 640):
+            msg = f"Unexpected raw images sequence length ({state.shape=})"
             raise ValueError(msg)
 
         encoded = self.tokenizer.encode(state) * self.sigma_data
 
-        if encoded.shape[2] == 16:
+        expected_t = self.config.state_t
+
+        if encoded.shape[2] == expected_t:
             return encoded
 
-        # this part is an optimization for only encoding the obs video prefix when the rest (zeros) will be ignored.
-        res = torch.zeros((B, 16, 16, 60, 80), device=state.device, dtype=state.dtype)
+        if encoded.shape[2] > expected_t:
+            raise ValueError(
+                f"Encoded latent has too many frames: encoded.shape={encoded.shape}, "
+                f"expected state_t={expected_t}"
+            )
+
+        # Pad only up to the configured state_t, not hardcoded 16.
+        res = torch.zeros(
+            (B, self.config.state_ch, expected_t, encoded.shape[3], encoded.shape[4]),
+            device=state.device,
+            dtype=encoded.dtype,
+        )
         res[:, :, : encoded.shape[2], :, :] = encoded
         return res
 
@@ -903,7 +916,7 @@ class Video2WorldPipeline(BasePipeline):
         _T, _H, _W = data_batch[input_key].shape[-3:]
         state_shape = [
             self.config.state_ch,
-            16,
+            self.config.state_t,
             _H // self.tokenizer.spatial_compression_factor,
             _W // self.tokenizer.spatial_compression_factor,
         ]

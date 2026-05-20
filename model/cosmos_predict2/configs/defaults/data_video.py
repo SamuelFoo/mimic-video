@@ -40,32 +40,8 @@ train_datasets: dict[str, Dataset_] = {
         is_val=False,
         obs_history=5,
     ),
-     "ex3-1-blue_all": L(Dataset)(
-        dataset_dir="/ephemeral/robot_learning_project/data/ex3-1-blue_all-cosmos-video",
-        num_frames=21,
-        video_size=[480, 640],
-        data_fps=10.0,
-        is_val=False,
-        obs_history=5,
-    ),
-     "ex3-2-blue_all": L(Dataset)(
-        dataset_dir="/ephemeral/robot_learning_project/data/ex3-2-blue_all-cosmos-video",
-        num_frames=21,
-        video_size=[480, 640],
-        data_fps=10.0,
-        is_val=False,
-        obs_history=5,
-    ),
-     "ex3-1-orange_all": L(Dataset)(
-        dataset_dir="/ephemeral/robot_learning_project/data/ex3-1-orange_all-cosmos-video",
-        num_frames=21,
-        video_size=[480, 640],
-        data_fps=10.0,
-        is_val=False,
-        obs_history=5,
-    ),
-     "ex3-2-orange_all": L(Dataset)(
-        dataset_dir="/ephemeral/robot_learning_project/data/ex3-2-orange_all-cosmos-video",
+     "ex3_all": L(Dataset)(
+        dataset_dir="/ephemeral/robot_learning_project/data/ex3_all-cosmos-video",
         num_frames=21,
         video_size=[480, 640],
         data_fps=10.0,
@@ -117,7 +93,7 @@ for k, v in train_datasets.items():
 
 
 dataset_mixes = {
-    "ex1_ex2_ex3_merged": "ex1_all_v4, ex2_all_v4, ex3-1-blue_all, ex3-1-orange_all, ex3-2-blue_all, ex3-2_orange_all",
+    "ex1_ex2_ex3_merged": "ex1_all_v4,ex2_all_v4,ex3_all",
 }
 
 for name, mix in dataset_mixes.items():

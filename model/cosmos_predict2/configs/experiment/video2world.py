@@ -68,7 +68,7 @@ BASE: dict = dict(
 )
 
 lrs = np.logspace(-5, -3, 9)[[1, 3, 5]]
-bszs = [32]
+bszs = [32, 64]
 ranks = [16, 32, 64, 128, 256]
 
 
