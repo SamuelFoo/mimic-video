@@ -72,9 +72,19 @@ def _encode_split(pipe, data_config, *, is_train: bool, cache_dir: pathlib.Path)
     world_size = distributed.get_world_size()
     is_rank0 = distributed.is_rank0()
 
-    dataset = get_dataset(data_config, is_train=is_train)
-    n = len(dataset)
     split_name = "train" if is_train else "val"
+    # ChunkReader raises ValueError("ChunkReader on no episodes doesn't make
+    # sense.") before we ever get a dataset to call len() on, so the empty-split
+    # case has to be caught here rather than via `n == 0` below.
+    try:
+        dataset = get_dataset(data_config, is_train=is_train)
+    except ValueError as e:
+        if "no episodes" in str(e):
+            if is_rank0:
+                logging.warning(f"Empty {split_name} dataset, skipping.")
+            return
+        raise
+    n = len(dataset)
     if n == 0:
         if is_rank0:
             logging.warning(f"Empty {split_name} dataset, skipping.")
