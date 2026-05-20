@@ -16,7 +16,7 @@ policy_io:
       horizon: 15
       normalization_type: ${NormalizationType:VARIANCE}
       target_repr: null
-      target_frequency: 5
+      target_frequency: 10
       shift_right_by: 0.2
 
   obs:
