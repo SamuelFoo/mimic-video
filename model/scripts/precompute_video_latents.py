@@ -1,9 +1,10 @@
 """Precompute VAE latents for the mimic-video training and validation datasets.
 
 For each sample i in MimicDataset, runs the frozen Cosmos VAE encoder on the
-concatenated obs+action raw video (`[3, 61, 480, 640]`) and saves the resulting
-`[16, 16, 60, 80]` latent into a single contiguous tensor file. Training then
-loads the file with mmap and skips the encoder.
+concatenated obs+action raw video (`[3, obs+action, 480, 640]`, currently
+`[3, 21, 480, 640]`) and saves the resulting `[state_ch, state_t, H/8, W/8]`
+latent (currently `[16, 6, 60, 80]`) into a single contiguous tensor file.
+Training then loads the file with mmap and skips the encoder.
 
 Prerequisite: pixel-space augmentations must be disabled in the transform
 config — see cosmos_predict2/configs/dataloading/dataset/transform/. Otherwise
@@ -45,9 +46,11 @@ class _TokenizerOnlyPipe:
     push BATCH_SIZE higher and saves ~5s of init.
     """
 
-    def __init__(self, tokenizer, sigma_data: float) -> None:
+    def __init__(self, tokenizer, sigma_data: float, state_ch: int, state_t: int) -> None:
         self.tokenizer = tokenizer
         self.sigma_data = sigma_data
+        self.state_ch = state_ch
+        self.state_t = state_t
 
     @torch.no_grad()
     def encode(self, state: torch.Tensor) -> torch.Tensor:
@@ -55,19 +58,34 @@ class _TokenizerOnlyPipe:
         if (T - 1) % 4 != 0 or (C, H, W) != (3, 480, 640):
             raise ValueError(f"Unexpected raw video shape {state.shape}")
         encoded = self.tokenizer.encode(state) * self.sigma_data
-        if encoded.shape[2] == 16:
+        if encoded.shape[2] == self.state_t:
             return encoded
-        res = torch.zeros((B, 16, 16, 60, 80), device=state.device, dtype=state.dtype)
+        if encoded.shape[2] > self.state_t:
+            raise ValueError(
+                f"Encoded latent has too many frames: encoded.shape={encoded.shape}, "
+                f"expected state_t={self.state_t}"
+            )
+        res = torch.zeros(
+            (B, self.state_ch, self.state_t, encoded.shape[3], encoded.shape[4]),
+            device=state.device,
+            dtype=encoded.dtype,
+        )
         res[:, :, : encoded.shape[2], :, :] = encoded
         return res
 
 BATCH_SIZE = int(os.environ.get("LATENT_PRECOMPUTE_BATCH_SIZE", 10))
 NUM_WORKERS = int(os.environ.get("LATENT_PRECOMPUTE_NUM_WORKERS", 12))
 PREFETCH_FACTOR = int(os.environ.get("LATENT_PRECOMPUTE_PREFETCH", 2))
-LATENT_SHAPE = (16, 16, 60, 80)  # (T_latent, C, H, W) per sample
 
 
-def _encode_split(pipe, data_config, *, is_train: bool, cache_dir: pathlib.Path) -> None:
+def _encode_split(
+    pipe,
+    data_config,
+    *,
+    is_train: bool,
+    cache_dir: pathlib.Path,
+    latent_shape: tuple[int, int, int, int],
+) -> None:
     rank = distributed.get_rank()
     world_size = distributed.get_world_size()
     is_rank0 = distributed.is_rank0()
@@ -117,7 +135,7 @@ def _encode_split(pipe, data_config, *, is_train: bool, cache_dir: pathlib.Path)
         prefetch_factor=PREFETCH_FACTOR if NUM_WORKERS > 0 else None,
     )
 
-    local_latents = torch.empty((len(local_indices), *LATENT_SHAPE), dtype=torch.bfloat16)
+    local_latents = torch.empty((len(local_indices), *latent_shape), dtype=torch.bfloat16)
 
     # Progress in samples, not batches — bumps by `bs` per loader iteration so
     # the ETA reflects actual samples-per-second regardless of batch size.
@@ -131,10 +149,10 @@ def _encode_split(pipe, data_config, *, is_train: bool, cache_dir: pathlib.Path)
     for batch in loader:
         obs = batch["obs/workspace_rgb"].cuda(non_blocking=True)
         action = batch["action/workspace_rgb"].cuda(non_blocking=True)
-        raw = torch.concat((obs, action), dim=2)  # [B, 3, 61, 480, 640]
+        raw = torch.concat((obs, action), dim=2)  # [B, 3, obs+action, 480, 640]
 
         with torch.no_grad():
-            encoded = pipe.encode(raw)  # [B, 16, 16, 60, 80]
+            encoded = pipe.encode(raw)  # [B, state_ch, state_t, H/8, W/8]
 
         bs = encoded.shape[0]
         local_latents[write_pos : write_pos + bs] = encoded.detach().cpu().to(torch.bfloat16)
@@ -165,7 +183,7 @@ def _encode_split(pipe, data_config, *, is_train: bool, cache_dir: pathlib.Path)
     if not is_rank0:
         return
 
-    merged = torch.empty((n, *LATENT_SHAPE), dtype=torch.bfloat16)
+    merged = torch.empty((n, *latent_shape), dtype=torch.bfloat16)
     for r in range(world_size):
         shard = torch.load(shard_dir / f"rank{r:04d}.pt", map_location="cpu")
         merged[shard["indices"]] = shard["latents"]
@@ -213,14 +231,22 @@ def main() -> None:
     # TokenizerInterface is not an nn.Module; the underlying VAE loads on CUDA
     # by default and is set to eval/no-grad in its own constructor.
     tokenizer = instantiate(video_pipe_config.tokenizer)
-    pipe = _TokenizerOnlyPipe(tokenizer, sigma_data=video_pipe_config.sigma_data)
+    pipe = _TokenizerOnlyPipe(
+        tokenizer,
+        sigma_data=video_pipe_config.sigma_data,
+        state_ch=video_pipe_config.state_ch,
+        state_t=video_pipe_config.state_t,
+    )
+
+    sf = tokenizer.spatial_compression_factor
+    latent_shape = (video_pipe_config.state_ch, video_pipe_config.state_t, 480 // sf, 640 // sf)
 
     # data_config is a LazyCall that returns the resolved Hydra DictConfig; we
     # need the concrete one to pass to get_dataset(is_train=...).
     data_config = instantiate(config.data_config)
 
-    _encode_split(pipe, data_config, is_train=True, cache_dir=cache_dir)
-    _encode_split(pipe, data_config, is_train=False, cache_dir=cache_dir)
+    _encode_split(pipe, data_config, is_train=True, cache_dir=cache_dir, latent_shape=latent_shape)
+    _encode_split(pipe, data_config, is_train=False, cache_dir=cache_dir, latent_shape=latent_shape)
 
     logging.info("Done.")
 

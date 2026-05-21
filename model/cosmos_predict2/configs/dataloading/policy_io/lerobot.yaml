@@ -7,7 +7,7 @@ img_resize_sizes: [480, 640]
 policy_io:
   action:
     workspace_rgb:
-      horizon: 56
+      horizon: 16
       normalization_type: ${NormalizationType:NONE}
       target_repr: null
       target_frequency: 5
