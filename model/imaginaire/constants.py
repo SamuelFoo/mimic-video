@@ -103,6 +103,8 @@ def get_cosmos_predict2_video2world_checkpoint(
     fps: CosmosPredict2Video2WorldFPS = 10,
     aspect_ratio: CosmosPredict2Video2WorldAspectRatio = "4:3",
 ) -> str:
+    if override := os.environ.get("VIDEO_DIT_PATH"):
+        return override
     model_dir = _get_cosmos_predict2_video2world_model_dir(model_size=model_size, model_type=model_type)
     assert fps == 10
     assert aspect_ratio == "4:3"
