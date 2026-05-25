@@ -33,6 +33,7 @@ from transformer_engine.pytorch.attention import (
     apply_rotary_pos_emb,
 )
 
+from cosmos_predict2.models.text2image_dit import LearnablePosEmbAxis
 from cosmos_predict2.networks.selective_activation_checkpoint import (
     CheckpointMode,
     SACConfig,
@@ -782,6 +783,9 @@ class World2ActionDIT(nn.Module):
         adaln_lora_dim: int,
         pair_timestep_feature_rank: int,
         sac_config: SACConfig,
+        video_len_t: int = 0,
+        video_len_h: int = 0,
+        video_len_w: int = 0,
     ) -> None:
         super().__init__()
         self.max_horizon = max_horizon
@@ -794,6 +798,18 @@ class World2ActionDIT(nn.Module):
         self.cuda_graphs = {}
 
         self.ctx_norm = nn.LayerNorm(crossattn_emb_channels, eps=1e-6)
+
+        if video_len_t > 0 and video_len_h > 0 and video_len_w > 0:
+            self.video_len_t = video_len_t
+            self.video_len_h = video_len_h
+            self.video_len_w = video_len_w
+            self.video_pos_embedder = LearnablePosEmbAxis(
+                interpolation="crop",
+                model_channels=crossattn_emb_channels,
+                len_h=video_len_h,
+                len_w=video_len_w,
+                len_t=video_len_t,
+            )
 
         self.obs_mask_token = nn.Parameter(torch.empty((1, 1, self.model_channels), dtype=torch.float32))
         self.obs_embedder = ActionEmbedder(in_channels, model_channels)
@@ -850,6 +866,9 @@ class World2ActionDIT(nn.Module):
         self.final_layer.init_weights()
         self.t_embedding_norm.reset_parameters()
 
+        if hasattr(self, "video_pos_embedder"):
+            self.video_pos_embedder.reset_parameters()
+
     def prepare_embedded_sequence(
         self,
         state_B_HO_O: torch.Tensor,
@@ -887,6 +906,13 @@ class World2ActionDIT(nn.Module):
         """
         assert not (self.training and use_cuda_graphs), "CUDA Graphs are supported only for inference"
         x_B_T_D = self.prepare_embedded_sequence(state_B_HO_O, xt_B_HA_A, obs_dropout=obs_dropout)
+
+        if hasattr(self, "video_pos_embedder"):
+            B, THW, D = crossattn_emb.shape
+            crossattn_emb_4d = crossattn_emb.reshape(B, self.video_len_t, self.video_len_h, self.video_len_w, D)
+            pos_emb = self.video_pos_embedder.generate_embeddings(crossattn_emb_4d.shape, fps=None)
+            crossattn_emb = (crossattn_emb_4d + pos_emb.to(crossattn_emb_4d.dtype)).reshape(B, THW, D)
+
         crossattn_emb = self.ctx_norm(crossattn_emb)
 
         t_embedding_B_T_DorR, adaln_lora_B_T_3D = self.t_embedder(timesteps_B_T, context_timesteps_B_1)
@@ -966,6 +992,9 @@ class World2ActionDIT(nn.Module):
         fully_shard(self.action_embedder, mesh=mesh, reshard_after_forward=True)
         fully_shard(self.final_layer, mesh=mesh, reshard_after_forward=True)
         fully_shard(self.t_embedder, mesh=mesh, reshard_after_forward=True)
+
+        if hasattr(self, "video_pos_embedder"):
+            fully_shard(self.video_pos_embedder, mesh=mesh, reshard_after_forward=True)
 
     def enable_context_parallel(self, process_group: ProcessGroup | None = None) -> None:
         raise NotImplementedError

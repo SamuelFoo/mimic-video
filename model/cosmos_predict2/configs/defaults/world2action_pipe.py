@@ -21,6 +21,9 @@ ACTION_DECODER_NETS = {
         adaln_lora_dim=128,
         pair_timestep_feature_rank=1024,
         sac_config=SACConfig(mode="none", every_n_blocks=1),
+        video_len_t=6,
+        video_len_h=30,
+        video_len_w=40,
     ),
     "bridge": L(VarNoiseWorld2ActionDIT)(
         max_horizon=16,
@@ -36,6 +39,9 @@ ACTION_DECODER_NETS = {
         adaln_lora_dim=128,
         pair_timestep_feature_rank=1024,
         sac_config=SACConfig(mode="none", every_n_blocks=1),
+        video_len_t=6,
+        video_len_h=30,
+        video_len_w=40,
     ),
     "lerobot": L(VarNoiseWorld2ActionDIT)(
         max_horizon=16,
@@ -51,6 +57,9 @@ ACTION_DECODER_NETS = {
         adaln_lora_dim=128,
         pair_timestep_feature_rank=1024,
         sac_config=SACConfig(mode="none", every_n_blocks=1),
+        video_len_t=6,
+        video_len_h=30,
+        video_len_w=40,
     ),
 }
 
