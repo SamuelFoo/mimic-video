@@ -285,7 +285,10 @@ class Checkpointer:
                         ),
                     )
                 else:
-                    optimizer.load_state_dict(state_dicts_to_load["optim"])
+                    try:
+                        optimizer.load_state_dict(state_dicts_to_load["optim"])
+                    except ValueError as e:
+                        log.warning(f"Could not load optimizer state (parameter group size mismatch): {e}. Starting with fresh optimizer state.")
                 log.info("- Loading the gradient scaler...")
                 grad_scaler.load_state_dict(state_dicts_to_load["trainer"]["grad_scaler"])
                 log.success(f"Done with loading the checkpoint (iteration {iteration}).")
