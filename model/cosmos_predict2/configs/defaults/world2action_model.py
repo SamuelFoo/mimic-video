@@ -69,6 +69,7 @@ VIDEO_MODEL_CKPT_NAMES = [
     "iter_000000375_fused",
     "iter_000000610_fused",
     "iter_000000650_fused",
+    "iter_000001410_fused"
 ]
 VIDEO_MODEL_CKPT_DIR = pathlib.Path(__file__).parents[3] / "checkpoints" / "video_backbone"
 
