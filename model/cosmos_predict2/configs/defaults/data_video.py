@@ -25,7 +25,7 @@ cs = ConfigStore.instance()
 
 train_datasets: dict[str, Dataset_] = {
     "ex1_all_v4": L(Dataset)(
-        dataset_dir="/ephemeral/robot_learning_project/data/ex1_all_v4-cosmos-video",
+        dataset_dir="/ephemeral/mimic-video-so101/data/ex1_all_v4-cosmos-video",
         num_frames=21,
         video_size=[480, 640],
         data_fps=10.0,
@@ -33,7 +33,7 @@ train_datasets: dict[str, Dataset_] = {
         obs_history=5,
     ),
     "ex2_all_v4": L(Dataset)(
-        dataset_dir="/ephemeral/robot_learning_project/data/ex2_all_v4-cosmos-video",
+        dataset_dir="/ephemeral/mimic-video-so101/data/ex2_all_v4-cosmos-video",
         num_frames=21,
         video_size=[480, 640],
         data_fps=10.0,
@@ -41,7 +41,7 @@ train_datasets: dict[str, Dataset_] = {
         obs_history=5,
     ),
      "ex3_all": L(Dataset)(
-        dataset_dir="/ephemeral/robot_learning_project/data/ex3_all-cosmos-video",
+        dataset_dir="/ephemeral/mimic-video-so101/data/ex3_all-cosmos-video",
         num_frames=21,
         video_size=[480, 640],
         data_fps=10.0,
